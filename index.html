@@ -389,24 +389,23 @@ const pitchLabel = document.getElementById('pitchLabel');
 // ---------- storage helpers (personal, per-book progress) ----------
 async function saveProgress(book){
   try{
-    await window.storage.set('progress:'+book.id, JSON.stringify({
+    localStorage.setItem('progress:'+book.id, JSON.stringify({
       title: book.title, currentPage: book.currentPage, currentSentence: book.currentSentence
-    }), false);
+    }));
   }catch(e){ /* non-fatal */ }
 }
 async function loadProgress(id){
   try{
-    const r = await window.storage.get('progress:'+id, false);
-    return r ? JSON.parse(r.value) : null;
+    const raw = localStorage.getItem('progress:'+id);
+    return raw ? JSON.parse(raw) : null;
   }catch(e){ return null; }
 }
 async function saveOcrCache(bookId, pageIndex, text){
-  try{ await window.storage.set('ocr:'+bookId+':'+pageIndex, text, false); }catch(e){}
+  try{ localStorage.setItem('ocr:'+bookId+':'+pageIndex, text); }catch(e){}
 }
 async function loadOcrCache(bookId, pageIndex){
   try{
-    const r = await window.storage.get('ocr:'+bookId+':'+pageIndex, false);
-    return r ? r.value : null;
+    return localStorage.getItem('ocr:'+bookId+':'+pageIndex);
   }catch(e){ return null; }
 }
 
