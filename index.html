@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>Voz de Papel</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#16110C">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Literata:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+  :root{
+    --bg:#16110C;
+    --surface:#201812;
+    --surface-2:#2A1F16;
+    --ink:#EFE3CF;
+    --ink-dim:#8A7860;
+    --amber:#D98E3F;
+    --amber-soft:#E8B579;
+    --rust:#8C3B2C;
+    --line:rgba(239,227,207,0.09);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;}
+  body{
+    background:
+      radial-gradient(ellipse at 50% -10%, rgba(217,142,63,0.10), transparent 55%),
+      var(--bg);
+    color:var(--ink);
+    font-family:'Literata', serif;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+  }
+
+  /* ---------- Header ---------- */
+  header{
+    width:100%;
+    max-width:760px;
+    padding:28px 20px 14px;
+    text-align:center;
+  }
+  .eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    letter-spacing:.18em;
+    text-transform:uppercase;
+    color:var(--amber);
+    opacity:.85;
+  }
+  h1{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    font-optical-sizing:auto;
+    font-size:clamp(28px,6vw,40px);
+    margin:6px 0 4px;
+    letter-spacing:-0.01em;
+  }
+  .sub{
+    color:var(--ink-dim);
+    font-size:14px;
+    font-style:italic;
+  }
+
+  main{
+    width:100%;
+    max-width:760px;
+    padding:10px 16px 140px;
+    flex:1;
+  }
+
+  /* ---------- Drop / upload zone ---------- */
+  .dropzone{
+    border:1px solid var(--line);
+    border-radius:14px;
+    background:var(--surface);
+    padding:28px 20px;
+    text-align:center;
+    margin:18px 0;
+    cursor:pointer;
+    transition:border-color .2s ease, background .2s ease;
+  }
+  .dropzone:hover, .dropzone.drag{
+    border-color:var(--amber);
+    background:var(--surface-2);
+  }
+  .dropzone svg{width:26px;height:26px;stroke:var(--amber);margin-bottom:8px;}
+  .dropzone p{margin:0;font-size:14px;color:var(--ink-dim);}
+  .dropzone strong{color:var(--ink);font-weight:600;}
+  input[type=file]{display:none;}
+
+  /* ---------- Library ---------- */
+  .library{margin:22px 0;}
+  .library h2{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--ink-dim);
+    margin:0 0 10px;
+    padding-left:2px;
+  }
+  .book-row{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:12px 14px;
+    border-radius:10px;
+    border:1px solid var(--line);
+    margin-bottom:8px;
+    cursor:pointer;
+    background:var(--surface);
+    transition:background .15s ease, border-color .15s ease;
+  }
+  .book-row:hover{background:var(--surface-2); border-color:rgba(217,142,63,.35);}
+  .book-row.active{border-color:var(--amber); background:var(--surface-2);}
+  .book-icon{
+    width:30px;height:38px;flex:none;border-radius:2px 6px 6px 2px;
+    background:linear-gradient(135deg, var(--rust), var(--amber));
+    box-shadow:inset -3px 0 0 rgba(0,0,0,.25);
+  }
+  .book-meta{flex:1;min-width:0;}
+  .book-title{font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .book-progress{font-family:'IBM Plex Mono', monospace;font-size:11px;color:var(--ink-dim);margin-top:2px;}
+  .book-del{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;color:var(--ink-dim);
+    background:none;border:none;cursor:pointer;padding:6px;
+  }
+  .book-del:hover{color:var(--rust);}
+
+  /* ---------- Reading pane ---------- */
+  .reader{
+    display:none;
+    border:1px solid var(--line);
+    border-radius:16px;
+    background:var(--surface);
+    overflow:hidden;
+    margin-top:8px;
+  }
+  .reader.show{display:block;}
+  .reader-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:14px 18px;
+    border-bottom:1px solid var(--line);
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    color:var(--ink-dim);
+  }
+  .reader-head .page-nav{display:flex; gap:8px; align-items:center;}
+  .reader-head button{
+    background:none;border:1px solid var(--line);color:var(--ink-dim);
+    border-radius:6px;padding:4px 9px;cursor:pointer;font-family:inherit;font-size:11px;
+  }
+  .reader-head button:hover{border-color:var(--amber); color:var(--amber-soft);}
+
+  .text-pane{
+    padding:26px 24px 34px;
+    max-height:48vh;
+    overflow-y:auto;
+    font-size:18px;
+    line-height:1.75;
+    font-weight:400;
+  }
+  .text-pane .s{
+    color:var(--ink-dim);
+    transition:color .25s ease;
+  }
+  .text-pane .s.done{color:rgba(239,227,207,0.55);}
+  .text-pane .s.active{
+    color:var(--ink);
+    background:linear-gradient(90deg, rgba(217,142,63,.16), transparent);
+    border-radius:3px;
+  }
+  .text-pane .s.active::before{
+    content:'';
+  }
+  .ocr-status{
+    display:flex; align-items:center; gap:10px;
+    padding:14px 18px; margin:2px 24px 0;
+    border:1px solid rgba(217,142,63,.3);
+    background:rgba(217,142,63,.07);
+    border-radius:10px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    color:var(--amber-soft);
+  }
+  .ocr-spin{
+    width:14px;height:14px;flex:none;
+    border:2px solid rgba(217,142,63,.3);
+    border-top-color:var(--amber);
+    border-radius:50%;
+    animation:ocrspin .8s linear infinite;
+  }
+  @keyframes ocrspin{ to{ transform:rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce){ .ocr-spin{animation:none;} }
+  .book-progress .scan-tag{ color:var(--amber-soft); }
+
+  /* ---------- Transport bar (fixed) ---------- */
+  .transport{
+    position:fixed; left:0; right:0; bottom:0;
+    display:flex; justify-content:center;
+    padding:14px 16px calc(14px + env(safe-area-inset-bottom));
+    background:linear-gradient(to top, var(--bg) 55%, transparent);
+    pointer-events:none;
+  }
+  .transport-inner{
+    pointer-events:auto;
+    width:100%; max-width:760px;
+    background:var(--surface-2);
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:12px 16px;
+    display:none;
+    flex-direction:column;
+    gap:10px;
+    box-shadow:0 12px 32px rgba(0,0,0,.35);
+  }
+  .transport-inner.show{display:flex;}
+
+  .transport-row{display:flex; align-items:center; gap:12px;}
+
+  .eq{
+    display:flex; align-items:flex-end; gap:2px; width:24px; height:20px; flex:none;
+  }
+  .eq span{
+    width:3px; background:var(--amber); border-radius:2px;
+    height:4px; opacity:.4;
+    transition:height .12s ease, opacity .12s ease;
+  }
+  .eq.on span{opacity:1; animation:eqpulse 0.9s ease-in-out infinite;}
+  .eq.on span:nth-child(1){animation-delay:0s;}
+  .eq.on span:nth-child(2){animation-delay:.15s;}
+  .eq.on span:nth-child(3){animation-delay:.3s;}
+  .eq.on span:nth-child(4){animation-delay:.45s;}
+  @keyframes eqpulse{
+    0%,100%{height:4px;}
+    50%{height:18px;}
+  }
+  @media (prefers-reduced-motion: reduce){
+    .eq.on span{animation:none; height:12px;}
+  }
+
+  .transport-title{
+    flex:1; min-width:0;
+    font-size:13px; color:var(--ink-dim);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+
+  .ctrl-btn{
+    background:none; border:none; color:var(--ink);
+    cursor:pointer; padding:6px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .ctrl-btn svg{width:20px;height:20px; stroke:var(--ink); fill:none;}
+  .ctrl-btn.play{
+    width:44px; height:44px; border-radius:50%;
+    background:var(--amber); color:var(--bg);
+  }
+  .ctrl-btn.play svg{stroke:none; fill:var(--bg); width:18px; height:18px;}
+  .ctrl-btn:hover svg{stroke:var(--amber-soft);}
+  .ctrl-btn.play:hover{background:var(--amber-soft);}
+
+  .transport-row.settings{gap:14px; font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--ink-dim);}
+  .transport-row.settings label{display:flex; align-items:center; gap:6px;}
+  .transport-row.settings select, .transport-row.settings input[type=range]{
+    accent-color:var(--amber);
+  }
+  select{
+    background:var(--surface); color:var(--ink); border:1px solid var(--line);
+    border-radius:6px; padding:4px 6px; font-family:inherit; font-size:11px; max-width:140px;
+  }
+
+  .empty-hint{
+    text-align:center; color:var(--ink-dim); font-size:13px; margin-top:8px;
+  }
+
+  ::-webkit-scrollbar{width:8px;}
+  ::-webkit-scrollbar-thumb{background:var(--line); border-radius:8px;}
+
+  :focus-visible{outline:2px solid var(--amber); outline-offset:2px;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">Lectura en voz alta</div>
+  <h1>Voz de Papel</h1>
+  <div class="sub">Sube un PDF y escúchalo mientras trabajas la tierra o revisas gráficos.</div>
+</header>
+
+<main>
+  <div class="dropzone" id="dropzone">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 8l5-5 5 5"/><path d="M5 21h14a2 2 0 0 0 2-2v-5"/><path d="M3 14v5a2 2 0 0 0 2 2"/></svg>
+    <p><strong>Toca para elegir un PDF</strong><br>o arrástralo aquí</p>
+    <input type="file" id="fileInput" accept="application/pdf" multiple>
+  </div>
+
+  <div class="library" id="library" style="display:none;">
+    <h2>Tu biblioteca</h2>
+    <div id="bookList"></div>
+  </div>
+
+  <div class="reader" id="reader">
+    <div class="reader-head">
+      <span id="pageLabel">Página 1</span>
+      <div class="page-nav">
+        <button id="prevPage">‹ anterior</button>
+        <button id="nextPage">siguiente ›</button>
+      </div>
+    </div>
+    <div class="ocr-status" id="ocrStatus" style="display:none;">
+      <div class="ocr-spin"></div>
+      <span>Reconociendo el texto de esta página (es un escaneo)…</span>
+    </div>
+    <div class="text-pane" id="textPane"></div>
+  </div>
+
+  <div class="empty-hint" id="emptyHint">Aún no hay libros cargados.</div>
+</main>
+
+<div class="transport">
+  <div class="transport-inner" id="transport">
+    <div class="transport-row">
+      <div class="eq" id="eq"><span></span><span></span><span></span><span></span></div>
+      <div class="transport-title" id="transportTitle">—</div>
+      <button class="ctrl-btn" id="btnBack" title="Oración anterior">
+        <svg viewBox="0 0 24 24" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 20 9 12l10-8v16Z"/><path d="M5 19V5"/></svg>
+      </button>
+      <button class="ctrl-btn play" id="btnPlay" title="Reproducir">
+        <svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8V4z"/></svg>
+      </button>
+      <button class="ctrl-btn" id="btnFwd" title="Oración siguiente">
+        <svg viewBox="0 0 24 24" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4l10 8-10 8V4Z"/><path d="M19 5v14"/></svg>
+      </button>
+    </div>
+    <div class="transport-row settings">
+      <label>Voz
+        <select id="voiceSelect"></select>
+      </label>
+      <label>Velocidad
+        <input type="range" id="rateRange" min="0.6" max="2" step="0.05" value="1">
+        <span id="rateLabel">1.0x</span>
+      </label>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+// ---------- state ----------
+let books = [];        // {id, title, size, pages:[{text, sentences:[...]}], currentPage, currentSentence}
+let activeBookId = null;
+let isPlaying = false;
+let voices = [];
+let selectedVoiceURI = null;
+
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const bookListEl = document.getElementById('bookList');
+const libraryEl = document.getElementById('library');
+const emptyHint = document.getElementById('emptyHint');
+const readerEl = document.getElementById('reader');
+const textPane = document.getElementById('textPane');
+const pageLabel = document.getElementById('pageLabel');
+const transport = document.getElementById('transport');
+const transportTitle = document.getElementById('transportTitle');
+const btnPlay = document.getElementById('btnPlay');
+const eqEl = document.getElementById('eq');
+const voiceSelect = document.getElementById('voiceSelect');
+const rateRange = document.getElementById('rateRange');
+const rateLabel = document.getElementById('rateLabel');
+
+// ---------- storage helpers (personal, per-book progress) ----------
+async function saveProgress(book){
+  try{
+    await window.storage.set('progress:'+book.id, JSON.stringify({
+      title: book.title, currentPage: book.currentPage, currentSentence: book.currentSentence
+    }), false);
+  }catch(e){ /* non-fatal */ }
+}
+async function loadProgress(id){
+  try{
+    const r = await window.storage.get('progress:'+id, false);
+    return r ? JSON.parse(r.value) : null;
+  }catch(e){ return null; }
+}
+async function saveOcrCache(bookId, pageIndex, text){
+  try{ await window.storage.set('ocr:'+bookId+':'+pageIndex, text, false); }catch(e){}
+}
+async function loadOcrCache(bookId, pageIndex){
+  try{
+    const r = await window.storage.get('ocr:'+bookId+':'+pageIndex, false);
+    return r ? r.value : null;
+  }catch(e){ return null; }
+}
+
+// ---------- sentence splitting ----------
+function splitSentences(text){
+  text = text.replace(/\s+/g,' ').trim();
+  if (!text) return [];
+  if (window.Intl && Intl.Segmenter){
+    const seg = new Intl.Segmenter('es', {granularity:'sentence'});
+    return Array.from(seg.segment(text), s => s.segment.trim()).filter(Boolean);
+  }
+  return text.match(/[^.!?]+[.!?]+(["')\]]?)|\S+$/g)?.map(s=>s.trim()).filter(Boolean) || [text];
+}
+
+// ---------- PDF loading ----------
+async function handleFiles(fileList){
+  for (const file of fileList){
+    if (file.type !== 'application/pdf') continue;
+    const id = file.name.replace(/\.pdf$/i,'') + '-' + file.size;
+    if (books.find(b=>b.id===id)) continue;
+
+    const buf = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({data: buf}).promise;
+    const pages = [];
+    for (let i=1; i<=pdf.numPages; i++){
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const text = content.items.map(it=>it.str).join(' ');
+      const sentences = splitSentences(text);
+      // Menos de ~15 caracteres de texto real casi siempre significa que la página es una imagen escaneada.
+      const needsOcr = text.trim().length < 15;
+      pages.push({ text, sentences, needsOcr, ocrDone: !needsOcr });
+    }
+
+    const progress = await loadProgress(id);
+    const book = {
+      id, title: file.name.replace(/\.pdf$/i,''), size: file.size,
+      pages, pdfDoc: pdf, currentPage: progress?.currentPage || 0,
+      currentSentence: progress?.currentSentence || 0
+    };
+    books.push(book);
+  }
+  renderLibrary();
+  if (books.length && !activeBookId) openBook(books[books.length-1].id);
+}
+
+fileInput.addEventListener('change', e => handleFiles(e.target.files));
+dropzone.addEventListener('click', () => fileInput.click());
+['dragenter','dragover'].forEach(ev=>dropzone.addEventListener(ev, e=>{e.preventDefault(); dropzone.classList.add('drag');}));
+['dragleave','drop'].forEach(ev=>dropzone.addEventListener(ev, e=>{e.preventDefault(); dropzone.classList.remove('drag');}));
+dropzone.addEventListener('drop', e => handleFiles(e.dataTransfer.files));
+
+// ---------- library UI ----------
+function renderLibrary(){
+  if (!books.length){ libraryEl.style.display='none'; emptyHint.style.display='block'; return; }
+  libraryEl.style.display='block'; emptyHint.style.display='none';
+  bookListEl.innerHTML = '';
+  books.forEach(b=>{
+    const totalSentences = b.pages.reduce((n,p)=>n+p.sentences.length,0);
+    const doneSentences = b.pages.slice(0,b.currentPage).reduce((n,p)=>n+p.sentences.length,0) + b.currentSentence;
+    const pct = totalSentences ? Math.round(100*doneSentences/totalSentences) : 0;
+    const row = document.createElement('div');
+    row.className = 'book-row' + (b.id===activeBookId ? ' active':'');
+    row.innerHTML = `
+      <div class="book-icon"></div>
+      <div class="book-meta">
+        <div class="book-title">${escapeHtml(b.title)}</div>
+        <div class="book-progress">Pág. ${b.currentPage+1}/${b.pages.length} · ${pct}% narrado</div>
+      </div>
+      <button class="book-del" data-id="${b.id}">quitar</button>
+    `;
+    row.addEventListener('click', (e)=>{
+      if (e.target.classList.contains('book-del')) return;
+      openBook(b.id);
+    });
+    row.querySelector('.book-del').addEventListener('click', (e)=>{
+      e.stopPropagation();
+      books = books.filter(x=>x.id!==b.id);
+      if (activeBookId===b.id){ stopSpeaking(); activeBookId=null; readerEl.classList.remove('show'); transport.classList.remove('show'); }
+      renderLibrary();
+    });
+    bookListEl.appendChild(row);
+  });
+}
+function escapeHtml(s){ return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// ---------- OCR (páginas escaneadas sin texto real) ----------
+let tesseractWorker = null;
+let tesseractReady = null;
+function getTesseractWorker(){
+  if (!tesseractReady){
+    tesseractReady = Tesseract.createWorker('spa').then(w => { tesseractWorker = w; return w; });
+  }
+  return tesseractReady;
+}
+
+async function ensurePageText(book, pageIndex){
+  const page = book.pages[pageIndex];
+  if (!page.needsOcr || page.ocrDone) return;
+
+  const cached = await loadOcrCache(book.id, pageIndex);
+  if (cached){
+    page.text = cached;
+    page.sentences = splitSentences(cached);
+    page.ocrDone = true;
+    return;
+  }
+
+  showOcrStatus(true);
+  try{
+    const pdfPage = await book.pdfDoc.getPage(pageIndex+1);
+    const viewport = pdfPage.getViewport({ scale: 2.2 });
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    await pdfPage.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+
+    const worker = await getTesseractWorker();
+    const { data: { text } } = await worker.recognize(canvas);
+
+    page.text = text;
+    page.sentences = splitSentences(text);
+    page.ocrDone = true;
+    saveOcrCache(book.id, pageIndex, text);
+  }catch(err){
+    console.error('OCR falló en la página', pageIndex+1, err);
+    page.sentences = [];
+    page.ocrDone = true; // evita reintentar en loop; el usuario puede recargar si hubo un problema de red
+  }finally{
+    showOcrStatus(false);
+  }
+}
+
+function showOcrStatus(on){
+  const el = document.getElementById('ocrStatus');
+  if (el) el.style.display = on ? 'flex' : 'none';
+}
+
+// ---------- reader UI ----------
+function openBook(id){
+  stopSpeaking();
+  activeBookId = id;
+  renderLibrary();
+  readerEl.classList.add('show');
+  transport.classList.add('show');
+  renderPage();
+  transportTitle.textContent = getActiveBook().title;
+}
+function getActiveBook(){ return books.find(b=>b.id===activeBookId); }
+
+async function renderPage(){
+  const book = getActiveBook();
+  if (!book) return;
+  const pageIndex = book.currentPage;
+  pageLabel.textContent = `Página ${pageIndex+1} de ${book.pages.length}`;
+
+  const page = book.pages[pageIndex];
+  if (page.needsOcr && !page.ocrDone){
+    textPane.innerHTML = '';
+    await ensurePageText(book, pageIndex);
+    if (getActiveBook()?.id !== book.id || book.currentPage !== pageIndex) return; // el usuario ya cambió de página/libro
+  }
+
+  textPane.innerHTML = page.sentences.length
+    ? page.sentences.map((s,i)=> `<span class="s" data-i="${i}">${escapeHtml(s)} </span>`).join('')
+    : `<span style="color:var(--ink-dim);font-style:italic;">No se pudo reconocer texto en esta página.</span>`;
+  highlightSentence(book.currentSentence);
+}
+function highlightSentence(i){
+  const spans = textPane.querySelectorAll('.s');
+  spans.forEach((el,idx)=>{
+    el.classList.toggle('active', idx===i);
+    el.classList.toggle('done', idx<i);
+  });
+  const active = textPane.querySelector('.s.active');
+  if (active) active.scrollIntoView({block:'center', behavior:'smooth'});
+}
+
+document.getElementById('prevPage').addEventListener('click', ()=>{
+  const book = getActiveBook(); if(!book) return;
+  stopSpeaking();
+  book.currentPage = Math.max(0, book.currentPage-1);
+  book.currentSentence = 0;
+  renderPage(); saveProgress(book); renderLibrary();
+});
+document.getElementById('nextPage').addEventListener('click', ()=>{
+  const book = getActiveBook(); if(!book) return;
+  stopSpeaking();
+  book.currentPage = Math.min(book.pages.length-1, book.currentPage+1);
+  book.currentSentence = 0;
+  renderPage(); saveProgress(book); renderLibrary();
+});
+
+// ---------- speech ----------
+function populateVoices(){
+  voices = speechSynthesis.getVoices();
+  const spanish = voices.filter(v=>v.lang.toLowerCase().startsWith('es'));
+  const list = spanish.length ? spanish : voices;
+  voiceSelect.innerHTML = list.map(v=>`<option value="${v.voiceURI}">${v.name} (${v.lang})</option>`).join('');
+  if (!selectedVoiceURI && list.length) selectedVoiceURI = list[0].voiceURI;
+  voiceSelect.value = selectedVoiceURI || '';
+}
+speechSynthesis.onvoiceschanged = populateVoices;
+populateVoices();
+voiceSelect.addEventListener('change', ()=>{ selectedVoiceURI = voiceSelect.value; });
+rateRange.addEventListener('input', ()=>{ rateLabel.textContent = parseFloat(rateRange.value).toFixed(2)+'x'; });
+
+async function speakCurrent(){
+  const book = getActiveBook(); if(!book) return;
+
+  let page = book.pages[book.currentPage];
+  if (page.needsOcr && !page.ocrDone){
+    await ensurePageText(book, book.currentPage);
+    if (!isPlaying || getActiveBook()?.id !== book.id) return;
+    page = book.pages[book.currentPage];
+    textPane.innerHTML = page.sentences.length
+      ? page.sentences.map((s,i)=> `<span class="s" data-i="${i}">${escapeHtml(s)} </span>`).join('')
+      : `<span style="color:var(--ink-dim);font-style:italic;">No se pudo reconocer texto en esta página.</span>`;
+  }
+
+  if (book.currentSentence >= page.sentences.length){
+    if (book.currentPage < book.pages.length-1){
+      book.currentPage++; book.currentSentence = 0;
+      await renderPage();
+      if (!isPlaying) return;
+      return speakCurrent();
+    } else {
+      isPlaying = false; updatePlayUI(); return;
+    }
+  }
+  const sentence = book.pages[book.currentPage].sentences[book.currentSentence];
+  highlightSentence(book.currentSentence);
+  const utter = new SpeechSynthesisUtterance(sentence);
+  const voice = voices.find(v=>v.voiceURI===selectedVoiceURI);
+  if (voice) { utter.voice = voice; utter.lang = voice.lang; } else { utter.lang = 'es-ES'; }
+  utter.rate = parseFloat(rateRange.value);
+  utter.onend = ()=>{
+    if (!isPlaying) return;
+    book.currentSentence++;
+    saveProgress(book);
+    speakCurrent();
+  };
+  speechSynthesis.speak(utter);
+}
+function stopSpeaking(){
+  isPlaying = false;
+  speechSynthesis.cancel();
+  updatePlayUI();
+}
+function updatePlayUI(){
+  eqEl.classList.toggle('on', isPlaying);
+  btnPlay.innerHTML = isPlaying
+    ? `<svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>`
+    : `<svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8V4z"/></svg>`;
+  btnPlay.title = isPlaying ? 'Pausar' : 'Reproducir';
+}
+
+btnPlay.addEventListener('click', ()=>{
+  const book = getActiveBook(); if(!book) return;
+  if (isPlaying){
+    stopSpeaking();
+  } else {
+    isPlaying = true;
+    updatePlayUI();
+    speakCurrent();
+  }
+});
+document.getElementById('btnBack').addEventListener('click', ()=>{
+  const book = getActiveBook(); if(!book) return;
+  stopSpeaking();
+  book.currentSentence = Math.max(0, book.currentSentence-1);
+  highlightSentence(book.currentSentence);
+  saveProgress(book); renderLibrary();
+});
+document.getElementById('btnFwd').addEventListener('click', ()=>{
+  const book = getActiveBook(); if(!book) return;
+  stopSpeaking();
+  const page = book.pages[book.currentPage];
+  book.currentSentence = Math.min(page.sentences.length-1, book.currentSentence+1);
+  highlightSentence(book.currentSentence);
+  saveProgress(book); renderLibrary();
+});
+textPane.addEventListener('click', (e)=>{
+  const span = e.target.closest('.s');
+  if (!span) return;
+  const book = getActiveBook(); if(!book) return;
+  stopSpeaking();
+  book.currentSentence = parseInt(span.dataset.i,10);
+  highlightSentence(book.currentSentence);
+  saveProgress(book); renderLibrary();
+});
+
+renderLibrary();
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(()=>{ /* sin conexión en el primer intento, no pasa nada */ });
+  });
+}
+</script>
+</body>
+</html>
